@@ -1,19 +1,3 @@
-# pdf_to_markdown_docling.py
-"""
-PDF → Markdown using Docling (lightweight, efficient)
-
-- Low memory usage (ideal for Mac M2)
-- Good table extraction to Markdown tables
-- Handles Japanese text in digital PDFs
-- CPU-only, ready for Ubuntu server later
-
-Install:
-    pip install docling
-
-Run:
-    python pdf_to_markdown_docling.py /path/to/your.pdf
-"""
-
 from pathlib import Path
 import sys
 from datetime import datetime

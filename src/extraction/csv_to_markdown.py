@@ -1,10 +1,3 @@
-# csv_to_markdown_jp.py
-"""
-CSV → Markdown table converter with strong Japanese encoding support
-Automatically saves generated Markdown into:
-/Users/admin/LG/Markdown/data/dump
-"""
-
 import csv
 import io
 import os

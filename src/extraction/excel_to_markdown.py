@@ -1,10 +1,3 @@
-# excel_to_markdown_jp.py
-"""
-Excel → Markdown tables (one per sheet)
-Automatically saves generated Markdown into:
-/Users/admin/LG/Markdown/data/dump
-"""
-
 import io
 import os
 from pathlib import Path
