@@ -1,16 +1,27 @@
 # csv_to_markdown_jp.py
 """
 CSV → Markdown table converter with strong Japanese encoding support
+Automatically saves generated Markdown into:
+/Users/admin/LG/Markdown/data/dump
 """
+
 import csv
 import io
+import os
+from pathlib import Path
+
 try:
     from charset_normalizer import from_bytes
 except ImportError:
     from charset_normalizer import detect  # older API fallback
 
+
 class TextExtractionError(Exception):
     pass
+
+
+DUMP_DIR = Path("/Users/admin/LG/Markdown/data/dump")
+
 
 def extract_text_from_csv(file_content: bytes) -> str:
     # Candidate encodings — ordered roughly by Japanese likelihood
@@ -29,7 +40,6 @@ def extract_text_from_csv(file_content: bytes) -> str:
     for enc in candidate_encodings:
         try:
             if enc is None:
-                # Use charset-normalizer (best for Japanese mixed content)
                 result = from_bytes(file_content).best()
                 if result:
                     detected_encoding = result.encoding
@@ -59,7 +69,7 @@ def extract_text_from_csv(file_content: bytes) -> str:
 
         header = [clean(cell) for cell in rows[0]]
         md = "| " + " | ".join(header) + " |\n"
-        md += "| " + " | ".join(["---"] * len(header)) + " |\n"   # simpler separator
+        md += "| " + " | ".join(["---"] * len(header)) + " |\n"
 
         for row in rows[1:]:
             cleaned_row = [clean(cell) for cell in row]
@@ -68,20 +78,48 @@ def extract_text_from_csv(file_content: bytes) -> str:
         return md
 
     except Exception as e:
-        raise TextExtractionError(f"CSV parsing failed (detected: {detected_encoding}): {str(e)}") from e
+        raise TextExtractionError(
+            f"CSV parsing failed (detected: {detected_encoding}): {str(e)}"
+        ) from e
+
+
+def save_markdown(markdown_text: str, input_csv_path: str):
+    """
+    Save generated markdown into dump directory
+    """
+    DUMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    input_name = Path(input_csv_path).stem
+    output_path = DUMP_DIR / f"{input_name}.md"
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(markdown_text)
+
+    return output_path
 
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) != 2:
         print("Usage: python csv_to_markdown_jp.py <input.csv>")
         sys.exit(1)
 
     path = sys.argv[1]
+
     try:
         with open(path, "rb") as f:
             content = f.read()
-        print(extract_text_from_csv(content))
+
+        markdown_output = extract_text_from_csv(content)
+
+        # Print to stdout (same behavior as before)
+        print(markdown_output)
+
+        # Save to dump directory
+        saved_path = save_markdown(markdown_output, path)
+        print(f"\nSaved Markdown to: {saved_path}")
+
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

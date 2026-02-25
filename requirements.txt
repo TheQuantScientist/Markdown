@@ -1,0 +1,10 @@
+openpyxl
+streamlit
+pandas
+pdfplumber
+pdfminer.six
+paddleocr 
+paddlepaddle 
+pdf2image 
+opencv-python 
+pillow
