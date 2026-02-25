@@ -1,152 +1,115 @@
-# pdf_to_markdown_paddle_jp.py
+# pdf_to_markdown_docling.py
 """
-PDF → Markdown using PaddleOCR PP-StructureV3 (Japanese optimized)
+PDF → Markdown using Docling (lightweight, efficient)
 
-- Works with scanned PDFs
-- Detects layout blocks (text, title, table, figure, etc.)
-- Extracts tables as embedded HTML (Markdown-compatible)
-- Outputs structured Markdown with page separation
-- Saves to /Users/admin/LG/Markdown/data/dump
+- Low memory usage (ideal for Mac M2)
+- Good table extraction to Markdown tables
+- Handles Japanese text in digital PDFs
+- CPU-only, ready for Ubuntu server later
 
-Requires: paddlepaddle (CPU version), paddleocr >=3.0, pdf2image, opencv-python
+Install:
+    pip install docling
+
+Run:
+    python pdf_to_markdown_docling.py /path/to/your.pdf
 """
-
-import os
-os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 
 from pathlib import Path
-import cv2
-import numpy as np
-from pdf2image import convert_from_bytes
+import sys
+from datetime import datetime
 
-from paddleocr import PPStructureV3
+try:
+    from docling.document_converter import DocumentConverter
+except ImportError:
+    print("Docling not installed. Install it with:")
+    print("    pip install docling")
+    sys.exit(1)
 
-class TextExtractionError(Exception):
-    pass
+# ================================================
+# CONFIG
+# ================================================
 
-DUMP_DIR = Path("/Users/admin/LG/Markdown/data/dump")
+OUTPUT_DIR = Path("/Users/admin/LG/Markdown/data/dump")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Initialize structure/layout + table engine (modern V3 pipeline)
-structure_engine = PPStructureV3(
-    lang="japan",
-    use_doc_orientation_classify=True,   # Helps with rotated/scanned pages
-    use_doc_unwarping=True,              # Corrects perspective distortion
-    # Optional: use_table_recognition=True (default), etc.
-)
+# Optional: limit pages to avoid memory issues (None = all pages)
+MAX_PAGES = None  # e.g. set to 10 for testing large PDFs
 
+# ================================================
 
-def convert_pdf_to_images(pdf_bytes: bytes):
-    """Convert PDF bytes to list of PIL images (RGB)"""
-    return convert_from_bytes(pdf_bytes, dpi=300)
+def pdf_to_markdown(pdf_path: str | Path) -> str:
+    pdf_path = Path(pdf_path)
+    if not pdf_path.is_file():
+        raise FileNotFoundError(f"File not found: {pdf_path}")
 
-
-def process_page(image):
-    """
-    Run PP-StructureV3 pipeline on a single page image
-    Returns Markdown-formatted string for that page
-    """
-    # Convert PIL (RGB) → OpenCV BGR numpy array
-    img = np.array(image)
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    print(f"Converting: {pdf_path.name}")
+    print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     try:
-        # Call the pipeline correctly: .predict(input=...)
-        # For single image (numpy array), it returns list of dicts
-        result = structure_engine.predict(input=img)
-    except Exception as e:
-        return f"(Error processing page: {str(e)})"
+        converter = DocumentConverter()
 
-    markdown_blocks = []
+        # Convert without extra kwargs (API expects only source)
+        result = converter.convert(pdf_path)
 
-    for block in result:
-        block_type = block.get("type", "").strip()
+        # Optional page limit (rough slice after conversion)
+        if MAX_PAGES is not None:
+            # Docling doesn't paginate perfectly, but we can approximate
+            md_full = result.document.export_to_markdown()
+            # Split by common page markers or headings; adjust as needed
+            blocks = md_full.split("\n\n")  # rough block split
+            limited_blocks = blocks[:MAX_PAGES * 3]  # conservative
+            md_content = "\n\n".join(limited_blocks)
+        else:
+            md_content = result.document.export_to_markdown()
 
-        # Optional debug: uncomment to inspect
-        # print(f"Debug: Block type = {block_type}, keys = {list(block.keys())}")
-
-        if block_type == "Text":
-            if "res" in block and isinstance(block["res"], (list, tuple)):
-                lines = [line[1][0] for line in block["res"] if isinstance(line, (list, tuple)) and len(line) > 1 and line[1]]
-                text_content = "\n".join(lines).strip()
-                if text_content:
-                    markdown_blocks.append(text_content)
-
-        elif block_type == "Title":
-            if "res" in block and isinstance(block["res"], (list, tuple)):
-                lines = [line[1][0] for line in block["res"] if isinstance(line, (list, tuple)) and len(line) > 1 and line[1]]
-                title_text = "\n".join(lines).strip()
-                if title_text:
-                    markdown_blocks.append(f"# {title_text}")
-
-        elif block_type == "Table":
-            if "res" in block and isinstance(block["res"], dict) and "html" in block["res"]:
-                html_table = block["res"]["html"]
-                markdown_blocks.append(html_table)  # Embed HTML table (supported in most Markdown viewers)
-
-        elif block_type in ["Figure", "Image", "Picture"]:
-            markdown_blocks.append("\n![Figure / Image detected]\n")
-
-        # Add handlers for other types if they appear (e.g., "Header", "List", "Equation")
-
-    return "\n\n".join(markdown_blocks) if markdown_blocks else "(No content extracted from this page)"
-
-
-def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    """Process all pages and build full Markdown document"""
-    try:
-        images = convert_pdf_to_images(pdf_bytes)
-
-        if not images:
-            return "(No pages found in PDF)"
-
-        output = []
-
-        for idx, img in enumerate(images, start=1):
-            page_md = process_page(img)
-            output.append(f"## Page {idx}\n\n{page_md}")
-
-        full_md = "\n\n".join(output)
-        return full_md if full_md.strip() else "(Empty document - check if PDF has selectable text or is heavily scanned)"
+        print(f"Finished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        return md_content
 
     except Exception as e:
-        raise TextExtractionError(f"PaddleOCR PDF processing failed: {str(e)}") from e
+        raise RuntimeError(f"Docling conversion failed: {str(e)}") from e
 
 
-def save_markdown(markdown_text: str, input_pdf_path: str) -> Path:
-    """Save Markdown to file"""
-    DUMP_DIR.mkdir(parents=True, exist_ok=True)
+def save_markdown(md_content: str, pdf_path: str | Path) -> Path:
+    pdf_path = Path(pdf_path)
+    stem = pdf_path.stem
+    out_path = OUTPUT_DIR / f"{stem}.md"
 
-    input_name = Path(input_pdf_path).stem
-    output_path = DUMP_DIR / f"{input_name}.md"
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(md_content)
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(markdown_text)
-
-    return output_path
+    return out_path
 
 
 if __name__ == "__main__":
-    import sys
-
     if len(sys.argv) != 2:
-        print("Usage: python pdf_to_markdown_paddle_jp.py <input.pdf>")
+        print("Usage:")
+        print("    python pdf_to_markdown_docling.py <input.pdf>")
+        print("")
+        print("Example:")
+        print("    python pdf_to_markdown_docling.py /Users/admin/LG/Markdown/data/pdf/20253rd_financialresult_059_e.pdf")
         sys.exit(1)
 
-    pdf_path = sys.argv[1]
+    input_pdf = sys.argv[1]
 
     try:
-        with open(pdf_path, "rb") as f:
-            pdf_content = f.read()
+        markdown_text = pdf_to_markdown(input_pdf)
 
-        print("Processing PDF...\n")
-        markdown_output = extract_text_from_pdf(pdf_content)
+        # Show preview
+        preview_length = 1800
+        preview = markdown_text[:preview_length]
+        if len(markdown_text) > preview_length:
+            preview += "\n\n... (truncated - see full file for complete output)"
 
-        print(markdown_output)
-        print("\n" + "-"*60 + "\n")
+        print("\n" + "="*70)
+        print("Markdown Preview (first part):")
+        print("-"*70)
+        print(preview)
+        print("="*70 + "\n")
 
-        saved_path = save_markdown(markdown_output, pdf_path)
-        print(f"Saved Markdown to: {saved_path}")
+        saved_path = save_markdown(markdown_text, input_pdf)
+        print(f"Markdown successfully saved to:")
+        print(f"  {saved_path}")
 
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"\nError: {str(e)}", file=sys.stderr)
         sys.exit(1)

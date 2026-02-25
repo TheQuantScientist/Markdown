@@ -1,10 +1,21 @@
-openpyxl
-streamlit
-pandas
-pdfplumber
-pdfminer.six
-paddleocr 
-paddlepaddle 
-pdf2image 
-opencv-python 
-pillow
+# ───────────────────────────────────────────────────────────────
+# requirements.txt    (optimized for Ubuntu server, CPU-only)
+# ───────────────────────────────────────────────────────────────
+
+# Core document conversion library (PDF → Markdown)
+docling>=2.70
+
+# Excel → Markdown (pandas + openpyxl engine)
+pandas>=2.2
+openpyxl>=3.1
+
+# Japanese / legacy encoding detection for CSV
+charset-normalizer>=3.3
+
+# ───────────────────────────────────────────────────────────────
+# Important notes / installation command for Ubuntu (CPU-only)
+# ───────────────────────────────────────────────────────────────
+# Recommended install command (Feb 2026 status):
+#
+#     pip install -r requirements.txt \
+#       --extra-index-url https://download.pytorch.org/whl/cpu
